@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Authentic Sarung Samarinda / Theater tartan weave backdrop from user attachment */
+.bg-theater-weave {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(rgba(248, 250, 252, 0.86), rgba(248, 250, 252, 0.90)),
+    url('/assets/aistudio/file_00000000c44461f7b7ec10a12d7c822b_80ccf13c.png');
+  background-repeat: repeat;
+  background-size: 280px 280px;
+  background-attachment: fixed;
+}
+
+.dark .bg-theater-weave {
+  background-color: #080b12;
+  background-image:
+    linear-gradient(rgba(8, 11, 18, 0.62), rgba(8, 11, 18, 0.72)),
+    url('/assets/aistudio/file_00000000c44461f7b7ec10a12d7c822b_80ccf13c.png');
+  background-repeat: repeat;
+  background-size: 280px 280px;
+  background-attachment: fixed;
+}
+
+.bg-app-weave {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(rgba(248, 250, 252, 0.90), rgba(248, 250, 252, 0.93)),
+    url('/assets/aistudio/file_00000000c44461f7b7ec10a12d7c822b_80ccf13c.png');
+  background-repeat: repeat;
+  background-size: 260px 260px;
+  background-attachment: fixed;
+}
+
+.dark .bg-app-weave {
+  background-color: #070a11;
+  background-image:
+    linear-gradient(rgba(7, 10, 17, 0.80), rgba(7, 10, 17, 0.86)),
+    url('/assets/aistudio/file_00000000c44461f7b7ec10a12d7c822b_80ccf13c.png');
+  background-repeat: repeat;
+  background-size: 260px 260px;
+  background-attachment: fixed;
+}
+
+/* Protected image anti-drag / anti-context */
+.protected-media {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
