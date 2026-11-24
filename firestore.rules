@@ -1,0 +1,658 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // PRIMITIVES & IDENTITY HELPERS
+    // ------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'fikri.yassaar15@guru.smp.belajar.id'
+        && request.auth.token.email_verified == true;
+    }
+
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (hasUserDoc() && userRole() in ['Super Admin', 'Admin'])
+      );
+    }
+
+    function isTeacher() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (hasUserDoc() && userRole() == 'Guru Pengampu')
+      );
+    }
+
+    function isCoreCommittee() {
+      return isSignedIn() && (
+        isTeacher() ||
+        (hasUserDoc() && userRole() in ['Pimpinan Produksi', 'Sekretaris', 'Bendahara', 'Sutradara', 'Asisten Sutradara'])
+      );
+    }
+
+    function isCoordinatorOrAbove() {
+      return isSignedIn() && (
+        isCoreCommittee() ||
+        (hasUserDoc() && userRole().matches('^Koordinator .*'))
+      );
+    }
+
+    function isStr(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    function isNonEmptyStr(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
+    function isValidStage(val) {
+      return val in ['PERSIAPAN', 'PELAKSANAAN', 'PERTUNJUKAN', 'PASCA'];
+    }
+
+    function isSafeStudentSelfRole(role) {
+      return role in [
+        'Pimpinan Produksi',
+        'Sekretaris',
+        'Bendahara',
+        'Sutradara',
+        'Asisten Sutradara',
+        'Koordinator Perlengkapan',
+        'Koordinator Publikasi',
+        'Koordinator Tata Panggung',
+        'Koordinator Tata Rias',
+        'Koordinator Tata Busana',
+        'Koordinator Tata Musik',
+        'Anggota Perlengkapan',
+        'Anggota Publikasi',
+        'Anggota Tata Panggung',
+        'Anggota Tata Rias',
+        'Anggota Tata Busana',
+        'Anggota Tata Musik',
+        'Pemeran'
+      ];
+    }
+
+    function isValidAnyRole(role) {
+      return isSafeStudentSelfRole(role) || role in ['Super Admin', 'Admin', 'Guru Pengampu'];
+    }
+
+    // ------------------------------------------------------------------
+    // VALIDATION BLUEPRINTS
+    // ------------------------------------------------------------------
+    function isValidAdminDoc(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'createdAt'])
+        && isValidId(data.uid)
+        && isNonEmptyStr(data.email, 200)
+        && data.role in ['Super Admin', 'Admin']
+        && isNonEmptyStr(data.createdAt, 64);
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'name', 'role', 'classId', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'role', 'divisionId', 'divisionName', 'classId', 'classIds', 'photoUrl', 'isActive', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && isNonEmptyStr(data.name, 120)
+        && isValidAnyRole(data.role)
+        && isNonEmptyStr(data.classId, 64)
+        && data.isActive is bool
+        && isNonEmptyStr(data.createdAt, 64)
+        && isNonEmptyStr(data.updatedAt, 64)
+        && (!('divisionId' in data) || isStr(data.divisionId, 60))
+        && (!('divisionName' in data) || isStr(data.divisionName, 80))
+        && (!('photoUrl' in data) || isStr(data.photoUrl, 400000))
+        && (!('classIds' in data) || (data.classIds is list && data.classIds.size() <= 20));
+    }
+
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll(['uid', 'email', 'classId', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'phone', 'nis', 'classId', 'updatedAt'])
+        && isValidId(data.uid)
+        && isStr(data.email, 200)
+        && isNonEmptyStr(data.classId, 64)
+        && isNonEmptyStr(data.updatedAt, 64)
+        && (!('phone' in data) || isStr(data.phone, 32))
+        && (!('nis' in data) || isStr(data.nis, 40));
+    }
+
+    function isValidUserCredential(data) {
+      return data.keys().hasAll(['uid', 'email', 'classId', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'tempPassword', 'classId', 'createdBy', 'updatedAt'])
+        && isValidId(data.uid)
+        && isNonEmptyStr(data.email, 200)
+        && isNonEmptyStr(data.classId, 64)
+        && isNonEmptyStr(data.updatedAt, 64)
+        && (!('tempPassword' in data) || isStr(data.tempPassword, 100))
+        && (!('createdBy' in data) || isStr(data.createdBy, 128));
+    }
+
+    function isValidClassDoc(data) {
+      return data.keys().hasAll(['id', 'name', 'code', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'code', 'troupeName', 'troupeLogo', 'teacherId', 'academicYear', 'isActive', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isNonEmptyStr(data.name, 120)
+        && isNonEmptyStr(data.code, 32)
+        && data.isActive is bool
+        && isNonEmptyStr(data.createdAt, 64)
+        && isNonEmptyStr(data.updatedAt, 64)
+        && (!('troupeName' in data) || isStr(data.troupeName, 120))
+        && (!('troupeLogo' in data) || isStr(data.troupeLogo, 400000))
+        && (!('teacherId' in data) || isStr(data.teacherId, 128))
+        && (!('academicYear' in data) || isStr(data.academicYear, 32));
+    }
+
+    function isValidAssessment(data) {
+      return data.keys().hasAll(['id', 'classId', 'studentId', 'assessorId', 'assessorCategory', 'stage', 'totalScore', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'classId', 'productionId', 'studentId', 'studentName', 'studentRole', 'studentDivision',
+          'assessorId', 'assessorName', 'assessorRole', 'assessorCategory', 'stage',
+          'scores', 'autoScores', 'totalScore', 'comment', 'isFinal', 'version',
+          'validatedBy', 'validatedAt', 'createdAt', 'updatedAt'
+        ])
+        && isNonEmptyStr(data.id, 256)
+        && isNonEmptyStr(data.classId, 64)
+        && isValidId(data.studentId)
+        && isValidId(data.assessorId)
+        && data.assessorCategory in ['GURU', 'ATASAN', 'REKAN', 'BAWAHAN']
+        && isValidStage(data.stage)
+        && data.totalScore is number && data.totalScore >= 0 && data.totalScore <= 100
+        && isNonEmptyStr(data.createdAt, 64)
+        && isNonEmptyStr(data.updatedAt, 64)
+        && (!('comment' in data) || isStr(data.comment, 2000));
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'classId', 'title', 'message', 'read', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'classId', 'title', 'message', 'category', 'read', 'link', 'createdAt'])
+        && isValidId(data.userId)
+        && isNonEmptyStr(data.classId, 64)
+        && isNonEmptyStr(data.title, 200)
+        && isNonEmptyStr(data.message, 2000)
+        && data.read is bool
+        && isNonEmptyStr(data.createdAt, 64)
+        && (!('category' in data) || isStr(data.category, 40))
+        && (!('link' in data) || isStr(data.link, 80));
+    }
+
+    function isValidComplaint(data) {
+      return data.keys().hasAll(['classId', 'studentId', 'subject', 'message', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'classId', 'studentId', 'studentName', 'subject', 'title', 'message', 'description', 'category', 'evidenceUrl', 'isAnonymous', 'status', 'teacherResponse', 'respondedBy', 'respondedAt', 'createdAt', 'updatedAt'])
+        && isNonEmptyStr(data.classId, 64)
+        && isValidId(data.studentId)
+        && isNonEmptyStr(data.subject, 200)
+        && isNonEmptyStr(data.message, 3000)
+        && data.status in ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
+        && isNonEmptyStr(data.createdAt, 64)
+        && isNonEmptyStr(data.updatedAt, 64)
+        && (!('title' in data) || isStr(data.title, 200))
+        && (!('description' in data) || isStr(data.description, 3000))
+        && (!('category' in data) || isStr(data.category, 80))
+        && (!('evidenceUrl' in data) || isStr(data.evidenceUrl, 1000))
+        && (!('teacherResponse' in data) || isStr(data.teacherResponse, 3000));
+    }
+
+    function isValidClassScopedWrite(data) {
+      return isNonEmptyStr(data.classId, 64)
+        && data.keys().size() <= 40;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['userId', 'action', 'timestamp'])
+        && data.keys().hasOnly(['id', 'userId', 'userName', 'role', 'action', 'targetType', 'targetId', 'details', 'timestamp'])
+        && isValidId(data.userId)
+        && isNonEmptyStr(data.action, 40)
+        && isNonEmptyStr(data.timestamp, 64)
+        && (!('details' in data) || isStr(data.details, 1000));
+    }
+
+    // ------------------------------------------------------------------
+    // COLLECTIONS
+    // ------------------------------------------------------------------
+    match /test/{docId} {
+      allow get: if isSignedIn() && isValidId(docId);
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() && isValidId(uid) && isValidAdminDoc(incoming()) && (isAdmin() || (isBootstrappedAdmin() && isOwner(uid)));
+      allow delete: if isAdmin() && isValidId(uid);
+    }
+
+    match /users/{uid} {
+      allow get: if isSignedIn() && isValidId(uid);
+      allow list: if isSignedIn() && resource.data.isActive is bool;
+      allow create: if isSignedIn() && isValidId(uid) && isValidUserProfile(incoming()) && (
+        isAdmin() ||
+        isTeacher() ||
+        (isBootstrappedAdmin() && isOwner(uid)) ||
+        (isOwner(uid) && incoming().uid == request.auth.uid && isSafeStudentSelfRole(incoming().role))
+      );
+      allow update: if isSignedIn() && isValidId(uid) && isValidUserProfile(incoming()) && (
+        isAdmin() ||
+        isTeacher() ||
+        (isOwner(uid)
+          && incoming().uid == existing().uid
+          && incoming().role == existing().role
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoUrl', 'updatedAt']))
+      );
+      allow delete: if (isAdmin() || isTeacher()) && isValidId(uid);
+    }
+
+    match /userPrivate/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (isOwner(uid) || isTeacher() || isAdmin());
+      allow list: if isTeacher() || isAdmin();
+      allow create, update: if isSignedIn() && isValidId(uid) && isValidUserPrivate(incoming()) && (
+        isAdmin() || isTeacher() || (isOwner(uid) && incoming().uid == request.auth.uid)
+      );
+      allow delete: if (isAdmin() || isTeacher()) && isValidId(uid);
+    }
+
+    match /userCredentials/{uid} {
+      allow get, list: if isTeacher() || isAdmin();
+      allow create, update: if (isTeacher() || isAdmin()) && isValidId(uid) && isValidUserCredential(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(uid);
+    }
+
+    match /classes/{classId} {
+      allow get: if isSignedIn() && isValidId(classId);
+      allow list: if isSignedIn() && resource.data.isActive is bool;
+      allow create: if (isTeacher() || isAdmin() || isBootstrappedAdmin()) && isValidId(classId) && isValidClassDoc(incoming());
+      allow update: if isValidId(classId) && isValidClassDoc(incoming()) && (
+        isTeacher() || isAdmin() ||
+        (isCoreCommittee() && incoming().diff(existing()).affectedKeys().hasOnly(['troupeName', 'troupeLogo', 'updatedAt']))
+      );
+      allow delete: if isAdmin() && isValidId(classId);
+
+      match /config/{configId} {
+        allow get, list: if isSignedIn();
+        allow create, update: if (isTeacher() || isAdmin() || isBootstrappedAdmin()) && isValidId(configId) && incoming().updatedAt is string && incoming().updatedAt.size() <= 64;
+        allow delete: if isAdmin() && isValidId(configId);
+      }
+    }
+
+    match /systemConfig/{configId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if (isTeacher() || isAdmin() || isBootstrappedAdmin() || isCoreCommittee()) && isValidId(configId);
+      allow delete: if isAdmin() && isValidId(configId);
+    }
+
+    match /productions/{prodId} {
+      allow get: if isSignedIn() && isValidId(prodId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(prodId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(prodId);
+    }
+
+    match /assessments/{assessmentId} {
+      allow get: if isSignedIn() && isValidId(assessmentId);
+      allow list: if isSignedIn() && (
+        resource.data.assessorId == request.auth.uid ||
+        resource.data.studentId == request.auth.uid ||
+        resource.data.classId is string
+      );
+      allow create: if isSignedIn() && isValidId(assessmentId) && isValidAssessment(incoming()) && (
+        isTeacher() || isAdmin() || incoming().assessorId == request.auth.uid
+      );
+      allow update: if isSignedIn() && isValidId(assessmentId) && isValidAssessment(incoming()) && (
+        isTeacher() || isAdmin() || (existing().assessorId == request.auth.uid && incoming().assessorId == existing().assessorId)
+      );
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(assessmentId);
+    }
+
+    match /assessmentHistory/{historyId} {
+      allow get: if (isTeacher() || isAdmin()) && isValidId(historyId);
+      allow list: if isTeacher() || isAdmin();
+      allow create: if isSignedIn() && isValidId(historyId) && isValidClassScopedWrite(incoming());
+      allow update, delete: if isAdmin() && isValidId(historyId);
+    }
+
+    match /attendanceSessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(sessionId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(sessionId);
+    }
+
+    match /attendanceRecords/{recordId} {
+      allow get: if isSignedIn() && isValidId(recordId);
+      allow list: if isSignedIn() && (resource.data.studentId == request.auth.uid || resource.data.classId is string);
+      allow create, update: if isSignedIn() && isValidId(recordId) && isValidClassScopedWrite(incoming()) && (
+        isCoreCommittee() || incoming().studentId == request.auth.uid
+      );
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(recordId);
+    }
+
+    match /deadlines/{deadlineId} {
+      allow get: if isSignedIn() && isValidId(deadlineId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(deadlineId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(deadlineId);
+    }
+
+    match /deadlineSubmissions/{subId} {
+      allow get: if isSignedIn() && isValidId(subId);
+      allow list: if isSignedIn() && (resource.data.studentId == request.auth.uid || resource.data.classId is string);
+      allow create, update: if isSignedIn() && isValidId(subId) && isValidClassScopedWrite(incoming()) && (
+        isTeacher() || isAdmin() || isCoreCommittee() || incoming().studentId == request.auth.uid
+      );
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(subId);
+    }
+
+    match /schedules/{scheduleId} {
+      allow get: if isSignedIn() && isValidId(scheduleId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(scheduleId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(scheduleId);
+    }
+
+    match /scheduleConfirmations/{confId} {
+      allow get: if isSignedIn() && isValidId(confId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(confId) && isValidClassScopedWrite(incoming()) && (
+        isTeacher() || incoming().userId == request.auth.uid
+      );
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(confId);
+    }
+
+    match /divisionSchedules/{divSchedId} {
+      allow get: if isSignedIn() && isValidId(divSchedId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(divSchedId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(divSchedId);
+    }
+
+    match /broadcasts/{broadcastId} {
+      allow get: if isSignedIn() && isValidId(broadcastId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(broadcastId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(broadcastId);
+    }
+
+    match /information/{infoId} {
+      allow get: if isSignedIn() && isValidId(infoId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(infoId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(infoId);
+    }
+
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && isValidId(notifId) && (existing().userId == request.auth.uid || isTeacher() || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(notifId) && isValidNotification(incoming());
+      allow update: if isSignedIn() && isValidId(notifId) && isValidNotification(incoming()) && (
+        isAdmin() || (existing().userId == request.auth.uid && incoming().userId == existing().userId)
+      );
+      allow delete: if isSignedIn() && isValidId(notifId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /complaints/{complaintId} {
+      allow get: if isSignedIn() && isValidId(complaintId) && (existing().studentId == request.auth.uid || isTeacher() || isAdmin());
+      allow list: if isSignedIn() && (resource.data.studentId == request.auth.uid || isTeacher() || isAdmin());
+      allow create: if isSignedIn() && isValidId(complaintId) && isValidComplaint(incoming()) && incoming().studentId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(complaintId) && isValidComplaint(incoming()) && (
+        isTeacher() || isAdmin() || (existing().studentId == request.auth.uid && incoming().studentId == existing().studentId)
+      );
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(complaintId);
+    }
+
+    match /kasSettings/{kasId} {
+      allow get: if isSignedIn() && isValidId(kasId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(kasId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(kasId);
+    }
+
+    match /kasPeriods/{periodId} {
+      allow get: if isSignedIn() && isValidId(periodId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(periodId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(periodId);
+    }
+
+    match /kasPayments/{payId} {
+      allow get: if isSignedIn() && isValidId(payId);
+      allow list: if isSignedIn() && (resource.data.studentId == request.auth.uid || resource.data.classId is string);
+      allow create, update: if isCoreCommittee() && isValidId(payId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(payId);
+    }
+
+    match /cashEntries/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(entryId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(entryId);
+    }
+
+    match /rabItems/{rabId} {
+      allow get: if isSignedIn() && isValidId(rabId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(rabId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(rabId);
+    }
+
+    match /rabDocuments/{docId} {
+      allow get: if isSignedIn() && isValidId(docId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(docId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(docId);
+    }
+
+    match /crossClassBroadcasts/{bcId} {
+      allow get: if isSignedIn() && isValidId(bcId) && (isTeacher() || isAdmin());
+      allow list: if isTeacher() || isAdmin();
+      allow create, update: if (isTeacher() || isAdmin())
+        && isValidId(bcId)
+        && incoming().keys().hasAll(['title', 'senderId', 'createdAt'])
+        && incoming().keys().size() <= 30
+        && isNonEmptyStr(incoming().title, 200)
+        && isValidId(incoming().senderId)
+        && (incoming().senderId == request.auth.uid || isAdmin())
+        && isNonEmptyStr(incoming().createdAt, 64);
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(bcId);
+    }
+
+    match /properties/{propId} {
+      allow get: if isSignedIn() && isValidId(propId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(propId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoordinatorOrAbove()) && isValidId(propId);
+    }
+
+    match /musicCues/{cueId} {
+      allow get: if isSignedIn() && isValidId(cueId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(cueId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoordinatorOrAbove()) && isValidId(cueId);
+    }
+
+    match /faceCharts/{fcId} {
+      allow get: if isSignedIn() && isValidId(fcId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(fcId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoordinatorOrAbove()) && isValidId(fcId);
+    }
+
+    match /costumes/{costumeId} {
+      allow get: if isSignedIn() && isValidId(costumeId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(costumeId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoordinatorOrAbove()) && isValidId(costumeId);
+    }
+
+    match /scripts/{scriptId} {
+      allow get: if isSignedIn() && isValidId(scriptId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(scriptId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(scriptId);
+    }
+
+    match /musicReferences/{refId} {
+      allow get: if isSignedIn() && isValidId(refId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(refId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoordinatorOrAbove()) && isValidId(refId);
+    }
+
+    match /promptBooks/{pbId} {
+      allow get: if isSignedIn() && isValidId(pbId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(pbId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(pbId);
+    }
+
+    match /equipment/{eqId} {
+      allow get: if isSignedIn() && isValidId(eqId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(eqId) && isValidClassScopedWrite(incoming()) && (
+        isTeacher() || isAdmin() || isCoordinatorOrAbove()
+      );
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(eqId);
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && isValidId(bookingId);
+      allow list: if isSignedIn() && (resource.data.bookerId == request.auth.uid || resource.data.bookedBy == request.auth.uid || resource.data.classId is string);
+      allow create: if isSignedIn() && isValidId(bookingId) && isValidClassScopedWrite(incoming()) && (
+        isTeacher() || incoming().bookerId == request.auth.uid || incoming().bookedBy == request.auth.uid
+      );
+      allow update: if isSignedIn() && isValidId(bookingId) && isValidClassScopedWrite(incoming()) && (
+        isTeacher() || isAdmin() || (
+          (existing().bookerId == request.auth.uid || existing().bookedBy == request.auth.uid)
+          && incoming().status in ['PENDING', 'CHECKED_OUT', 'RETURNED', 'CANCELLED', 'OVERDUE']
+        )
+      );
+      allow delete: if isSignedIn() && isValidId(bookingId) && (
+        isTeacher() || isAdmin() || ((existing().bookerId == request.auth.uid || existing().bookedBy == request.auth.uid) && existing().status == 'PENDING')
+      );
+    }
+
+    match /notulensi/{notulenId} {
+      allow get: if isSignedIn() && isValidId(notulenId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(notulenId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(notulenId);
+    }
+
+    match /documents/{docId} {
+      allow get: if isSignedIn() && isValidId(docId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(docId) && isValidClassScopedWrite(incoming());
+      allow delete: if isSignedIn() && isValidId(docId) && (
+        isTeacher() || isAdmin() || existing().uploadedBy == request.auth.uid
+      );
+    }
+
+    match /driveSubmissions/{dsId} {
+      allow get: if isSignedIn() && isValidId(dsId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(dsId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(dsId);
+    }
+
+    match /templateSubmissions/{tsId} {
+      allow get: if isSignedIn() && isValidId(tsId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(tsId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(tsId);
+    }
+
+    match /templateDrafts/{tdId} {
+      allow get: if isSignedIn() && isValidId(tdId) && (existing().userId == request.auth.uid || isTeacher() || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isTeacher() || isAdmin());
+      allow create, update: if isSignedIn() && isValidId(tdId) && isValidClassScopedWrite(incoming()) && (
+        incoming().userId == request.auth.uid || isTeacher() || isAdmin()
+      );
+      allow delete: if isSignedIn() && isValidId(tdId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /timelineConfigs/{cfgId} {
+      allow get: if isSignedIn() && isValidId(cfgId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(cfgId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(cfgId);
+    }
+
+    match /timelineWeeks/{twId} {
+      allow get: if isSignedIn() && isValidId(twId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoordinatorOrAbove() && isValidId(twId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(twId);
+    }
+
+    match /contentSchedules/{csId} {
+      allow get: if isSignedIn() && isValidId(csId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(csId) && isValidClassScopedWrite(incoming()) && (
+        isCoordinatorOrAbove() || (hasUserDoc() && userRole() == 'Anggota Publikasi')
+      );
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee() || (hasUserDoc() && userRole() in ['Koordinator Publikasi', 'Anggota Publikasi'])) && isValidId(csId);
+    }
+
+    match /directorTimelines/{dtId} {
+      allow get: if isSignedIn() && isValidId(dtId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isCoreCommittee() && isValidId(dtId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin() || isCoreCommittee()) && isValidId(dtId);
+    }
+
+    match /interClassEvents/{evId} {
+      allow get: if isSignedIn() && isValidId(evId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if (isTeacher() || isAdmin()) && isValidId(evId) && isValidClassScopedWrite(incoming());
+      allow delete: if (isTeacher() || isAdmin()) && isValidId(evId);
+    }
+
+    match /auditLogs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (existing().userId == request.auth.uid || isTeacher() || isCoreCommittee() || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isTeacher() || isCoreCommittee() || isAdmin());
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming()) && (incoming().userId == request.auth.uid || isTeacher() || isAdmin());
+      allow update, delete: if false;
+    }
+
+    match /reminderLog/{remId} {
+      allow get: if isSignedIn() && isValidId(remId);
+      allow list: if isSignedIn() && resource.data.classId is string;
+      allow create, update: if isSignedIn() && isValidId(remId) && isValidClassScopedWrite(incoming());
+      allow delete: if isAdmin() && isValidId(remId);
+    }
+  }
+}

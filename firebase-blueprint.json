@@ -1,0 +1,355 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Trusted administrator registry entry for RBAC elevation.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["Super Admin", "Admin"] },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "role", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Non-PII class directory profile for students, teachers, and admins.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "divisionId": { "type": "string", "maxLength": 60 },
+        "divisionName": { "type": "string", "maxLength": 80 },
+        "classId": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "classIds": { "type": "array" },
+        "photoUrl": { "type": "string", "maxLength": 400000 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "name", "role", "classId", "isActive", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Isolated PII record containing email, phone, and student/teacher ID.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "nis": { "type": "string", "maxLength": 40 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "classId", "updatedAt"]
+    },
+    "UserCredential": {
+      "title": "UserCredential",
+      "description": "Teacher/Admin-managed student credential record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 200 },
+        "tempPassword": { "type": "string", "maxLength": 100 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "classId", "updatedAt"]
+    },
+    "SchoolClass": {
+      "title": "SchoolClass",
+      "description": "Class & theater troupe metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "code": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "troupeName": { "type": "string", "maxLength": 120 },
+        "troupeLogo": { "type": "string", "maxLength": 400000 },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "academicYear": { "type": "string", "maxLength": 32 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "code", "isActive", "createdAt", "updatedAt"]
+    },
+    "ClassConfig": {
+      "title": "ClassConfig",
+      "description": "Class-level configuration for stageManager or assessorWeights.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "currentStage": { "type": "string", "enum": ["PERSIAPAN", "PELAKSANAAN", "PERTUNJUKAN", "PASCA"] },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["updatedAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Global system config such as Google Drive folder directory.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["updatedAt"]
+    },
+    "Production": {
+      "title": "Production",
+      "description": "Theater production project metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 180 },
+        "synopsis": { "type": "string", "maxLength": 2000 },
+        "stage": { "type": "string", "enum": ["PERSIAPAN", "PELAKSANAAN", "PERTUNJUKAN", "PASCA"] },
+        "performanceDate": { "type": "string", "maxLength": 64 },
+        "venue": { "type": "string", "maxLength": 180 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "classId", "title", "stage", "createdAt"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "360-degree multi-assessor score record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 256 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "productionId": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "studentRole": { "type": "string", "maxLength": 60 },
+        "studentDivision": { "type": "string", "maxLength": 80 },
+        "assessorId": { "type": "string", "maxLength": 128 },
+        "assessorName": { "type": "string", "maxLength": 120 },
+        "assessorRole": { "type": "string", "maxLength": 60 },
+        "assessorCategory": { "type": "string", "enum": ["GURU", "ATASAN", "REKAN", "BAWAHAN"] },
+        "stage": { "type": "string", "enum": ["PERSIAPAN", "PELAKSANAAN", "PERTUNJUKAN", "PASCA"] },
+        "totalScore": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 2000 },
+        "isFinal": { "type": "boolean" },
+        "version": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["classId", "studentId", "assessorId", "assessorCategory", "stage", "totalScore", "createdAt", "updatedAt"]
+    },
+    "AssessmentHistory": {
+      "title": "AssessmentHistory",
+      "description": "Revision log for edited or deleted assessments.",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string", "maxLength": 64 },
+        "assessmentId": { "type": "string", "maxLength": 256 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "editedBy": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["classId", "assessmentId", "editedBy", "action", "createdAt"]
+    },
+    "AttendanceSession": {
+      "title": "AttendanceSession",
+      "description": "Attendance check-in session opened by teacher or secretary.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "stage": { "type": "string", "enum": ["PERSIAPAN", "PELAKSANAAN", "PERTUNJUKAN", "PASCA"] },
+        "date": { "type": "string", "maxLength": 32 },
+        "title": { "type": "string", "maxLength": 180 },
+        "activityType": { "type": "string", "enum": ["Rapat", "Latihan", "Gladi", "Pementasan", "Lainnya"] },
+        "targetScope": { "type": "string", "maxLength": 40 },
+        "isOpen": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["classId", "stage", "date", "title", "activityType", "isOpen", "createdBy", "createdAt"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Individual student attendance entry for a session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 256 },
+        "sessionId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["Hadir", "Izin", "Sakit", "Alpa"] },
+        "timestamp": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["sessionId", "studentId", "classId", "status", "timestamp"]
+    },
+    "Deadline": {
+      "title": "Deadline",
+      "description": "Assigned production task and due date.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "stage": { "type": "string", "enum": ["PERSIAPAN", "PELAKSANAAN", "PERTUNJUKAN", "PASCA"] },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "dueDate": { "type": "string", "maxLength": 64 },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        "targetScope": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["PENDING", "CANCELLED"] },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["classId", "stage", "title", "dueDate", "priority", "status", "createdBy", "createdAt"]
+    },
+    "DeadlineSubmission": {
+      "title": "DeadlineSubmission",
+      "description": "Student proof submission for a deadline task.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 256 },
+        "deadlineId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["BELUM", "SELESAI", "TERLAMBAT"] },
+        "submittedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["deadlineId", "studentId", "classId", "status", "submittedAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Per-user in-app notification.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "category": { "type": "string", "maxLength": 40 },
+        "read": { "type": "boolean" },
+        "link": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "classId", "title", "message", "read", "createdAt"]
+    },
+    "ComplaintItem": {
+      "title": "ComplaintItem",
+      "description": "Student complaint or issue report to teachers.",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 3000 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "category": { "type": "string", "maxLength": 80 },
+        "evidenceUrl": { "type": "string", "maxLength": 1000 },
+        "isAnonymous": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["classId", "studentId", "subject", "message", "status", "createdAt", "updatedAt"]
+    },
+    "ClassScopedItem": {
+      "title": "ClassScopedItem",
+      "description": "Generic class-scoped production module item (schedules, broadcasts, kas, rab, properties, musicCues, faceCharts, costumes, scripts, musicReferences, promptBooks, bookings, notulensi, documents, timelines).",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["classId", "createdAt"]
+    },
+    "AuditLogItem": {
+      "title": "AuditLogItem",
+      "description": "Immutable activity audit log.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "maxLength": 60 },
+        "action": { "type": "string", "maxLength": 40 },
+        "targetType": { "type": "string", "maxLength": 60 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "timestamp": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId", "action", "timestamp"]
+    },
+    "CrossClassBroadcast": {
+      "title": "CrossClassBroadcast",
+      "description": "Global or multi-class teacher/admin broadcast record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "content": { "type": "string", "maxLength": 4000 },
+        "priority": { "type": "string", "maxLength": 32 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 120 },
+        "targetClassIds": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["title", "senderId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": { "schema": { "$ref": "#/entities/AdminUser" }, "description": "Administrator registry" },
+    "/users/{uid}": { "schema": { "$ref": "#/entities/UserProfile" }, "description": "Non-PII class directory profiles" },
+    "/userPrivate/{uid}": { "schema": { "$ref": "#/entities/UserPrivate" }, "description": "Isolated user PII" },
+    "/userCredentials/{uid}": { "schema": { "$ref": "#/entities/UserCredential" }, "description": "Managed student credentials" },
+    "/classes/{classId}": { "schema": { "$ref": "#/entities/SchoolClass" }, "description": "Classes and theater troupes" },
+    "/classes/{classId}/config/{configId}": { "schema": { "$ref": "#/entities/ClassConfig" }, "description": "StageManager and AssessorWeights configs" },
+    "/systemConfig/{configId}": { "schema": { "$ref": "#/entities/SystemConfig" }, "description": "Global Drive folders config" },
+    "/productions/{prodId}": { "schema": { "$ref": "#/entities/Production" }, "description": "Production projects" },
+    "/assessments/{assessmentId}": { "schema": { "$ref": "#/entities/Assessment" }, "description": "360-degree assessments" },
+    "/assessmentHistory/{historyId}": { "schema": { "$ref": "#/entities/AssessmentHistory" }, "description": "Assessment revision history" },
+    "/attendanceSessions/{sessionId}": { "schema": { "$ref": "#/entities/AttendanceSession" }, "description": "Attendance sessions" },
+    "/attendanceRecords/{recordId}": { "schema": { "$ref": "#/entities/AttendanceRecord" }, "description": "Attendance records" },
+    "/deadlines/{deadlineId}": { "schema": { "$ref": "#/entities/Deadline" }, "description": "Production task deadlines" },
+    "/deadlineSubmissions/{subId}": { "schema": { "$ref": "#/entities/DeadlineSubmission" }, "description": "Student deadline submissions" },
+    "/schedules/{scheduleId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "General schedules" },
+    "/scheduleConfirmations/{confId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "RSVP confirmations" },
+    "/divisionSchedules/{divSchedId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Division schedules" },
+    "/broadcasts/{broadcastId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Class announcements" },
+    "/crossClassBroadcasts/{bcId}": { "schema": { "$ref": "#/entities/CrossClassBroadcast" }, "description": "Cross-class broadcast history" },
+    "/information/{infoId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Pinned announcements and photo board items" },
+    "/notifications/{notifId}": { "schema": { "$ref": "#/entities/NotificationItem" }, "description": "User notifications" },
+    "/complaints/{complaintId}": { "schema": { "$ref": "#/entities/ComplaintItem" }, "description": "Student complaints" },
+    "/kasSettings/{kasId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Treasury periods and settings" },
+    "/kasPeriods/{periodId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Legacy treasury periods" },
+    "/kasPayments/{payId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Student treasury payments" },
+    "/cashEntries/{entryId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Cash ledger income and expense entries" },
+    "/rabItems/{rabId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Budget plan items" },
+    "/rabDocuments/{docId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Signed RAB PDF/document archive" },
+    "/properties/{propId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Stage props inventory" },
+    "/musicCues/{cueId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Audio cue sheets" },
+    "/faceCharts/{fcId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Makeup face charts" },
+    "/costumes/{costumeId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Costume tracking" },
+    "/scripts/{scriptId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Theater scripts" },
+    "/musicReferences/{refId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Music reference library" },
+    "/promptBooks/{pbId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Director prompt books" },
+    "/equipment/{eqId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Bookable school and class music equipment" },
+    "/bookings/{bookingId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Equipment bookings" },
+    "/notulensi/{notulenId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Meeting minutes" },
+    "/documents/{docId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Drive document archive" },
+    "/driveSubmissions/{dsId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Drive submissions" },
+    "/templateSubmissions/{tsId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Production document template submissions" },
+    "/templateDrafts/{tdId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Per-user production template drafts" },
+    "/timelineConfigs/{cfgId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Master timeline production config" },
+    "/timelineWeeks/{twId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Weekly production timeline" },
+    "/contentSchedules/{csId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Publication content schedules" },
+    "/directorTimelines/{dtId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Director rehearsal timelines" },
+    "/interClassEvents/{evId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Inter-class joint production events" },
+    "/auditLogs/{logId}": { "schema": { "$ref": "#/entities/AuditLogItem" }, "description": "System audit logs" },
+    "/reminderLog/{remId}": { "schema": { "$ref": "#/entities/ClassScopedItem" }, "description": "Deduplicated reminder log" }
+  }
+}

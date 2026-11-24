@@ -1,0 +1,6 @@
+{
+  "name": "SP-PPT Samarinda",
+  "description": "Sistem Penilaian 360° dan Manajemen Proyek Produksi Teater Kelas IX SMP Negeri 10 Samarinda.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
